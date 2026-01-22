@@ -17,19 +17,43 @@ function install_ubuntu() {
     apt-get update -y
     apt-get install -y gpg-agent wget
     # To add the online network package repository for the GPU Driver
-    wget -qO - https://repositories.intel.com/gpu/intel-graphics.key \
+    # Note: -e "no_proxy=" is needed to bypass no_proxy settings that include .intel.com
+    # since repositories.intel.com is hosted externally and requires proxy access
+    wget -e "no_proxy=" -qO - https://repositories.intel.com/gpu/intel-graphics.key \
         | gpg --yes --dearmor --output /usr/share/keyrings/intel-graphics.gpg
     echo "deb [arch=amd64 signed-by=/usr/share/keyrings/intel-graphics.gpg] \
         https://repositories.intel.com/gpu/ubuntu ${VERSION_CODENAME}${XPU_DRIVER_VERSION} unified" \
         | tee /etc/apt/sources.list.d/intel-gpu-${VERSION_CODENAME}.list
     # To add the online network network package repository for the Intel Support Packages
-    wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
+    wget -e "no_proxy=" -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
         | gpg --dearmor > /usr/share/keyrings/oneapi-archive-keyring.gpg.gpg
     echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg.gpg] \
         https://apt.repos.intel.com/oneapi all main" \
         | tee /etc/apt/sources.list.d/oneAPI.list
 
-    # Update the packages list and repository index
+    # Configure apt to use proxy for Intel's external repositories
+    # These repositories are hosted externally and need proxy access even though they're *.intel.com
+    # Debug: show proxy settings
+    echo "DEBUG: http_proxy=${http_proxy:-not set}"
+    echo "DEBUG: https_proxy=${https_proxy:-not set}"
+    echo "DEBUG: no_proxy=${no_proxy:-not set}"
+    
+    if [[ -n "${http_proxy:-}${https_proxy:-}" ]]; then
+        PROXY_URL="${https_proxy:-${http_proxy}}"
+        echo "Configuring apt proxy for Intel repositories: ${PROXY_URL}"
+        # Set global apt proxy - Intel repos need it
+        cat > /etc/apt/apt.conf.d/99intel-proxy << EOF
+Acquire::http::Proxy "${PROXY_URL}";
+Acquire::https::Proxy "${PROXY_URL}";
+EOF
+        cat /etc/apt/apt.conf.d/99intel-proxy
+    else
+        echo "WARNING: No proxy configured, Intel repositories may not be reachable"
+    fi
+
+    # Unset no_proxy for apt-get update because Intel repos are external and need proxy
+    # even though they match *.intel.com in no_proxy
+    unset no_proxy NO_PROXY
     apt-get update
 
     # The xpu-smi packages

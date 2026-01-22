@@ -66,18 +66,21 @@ RUN rm install_inductor_benchmark_deps.sh common_utils.sh timm.txt huggingface-r
 
 # Install XPU Dependencies
 ARG XPU_VERSION
+ARG http_proxy
+ARG https_proxy
+ARG no_proxy
 COPY ./common/install_xpu.sh install_xpu.sh
 RUN bash ./install_xpu.sh && rm install_xpu.sh
 
-ARG TRITON
-# Install triton, this needs to be done before sccache because the latter will
-# try to reach out to S3, which docker build runners don't have access
-COPY ./common/install_triton.sh install_triton.sh
-COPY ./common/common_utils.sh common_utils.sh
-COPY ci_commit_pins/triton-xpu.txt triton-xpu.txt
-COPY triton_xpu_version.txt triton_version.txt
-RUN if [ -n "${TRITON}" ]; then bash ./install_triton.sh; fi
-RUN rm install_triton.sh common_utils.sh triton-xpu.txt triton_version.txt
+# ARG TRITON
+# # Install triton, this needs to be done before sccache because the latter will
+# # try to reach out to S3, which docker build runners don't have access
+# COPY ./common/install_triton.sh install_triton.sh
+# COPY ./common/common_utils.sh common_utils.sh
+# COPY ci_commit_pins/triton-xpu.txt triton-xpu.txt
+# COPY triton_xpu_version.txt triton_version.txt
+# RUN if [ -n "${TRITON}" ]; then bash ./install_triton.sh; fi
+# RUN rm install_triton.sh common_utils.sh triton-xpu.txt triton_version.txt
 
 # (optional) Install vision packages like OpenCV
 ARG VISION

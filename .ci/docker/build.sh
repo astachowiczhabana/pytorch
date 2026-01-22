@@ -230,7 +230,7 @@ case "$tag" in
     VISION=yes
     XPU_VERSION=2025.3
     NINJA_VERSION=1.9.0
-    TRITON=yes
+    TRITON=
     if [[ $tag =~ "benchmarks" ]]; then
       INDUCTOR_BENCHMARKS=yes
     fi

@@ -28,6 +28,8 @@ fi
 # The logic here is copied from .ci/pytorch/common_utils.sh
 TRITON_PINNED_COMMIT=$(get_pinned_commit ${TRITON_TEXT_FILE})
 
+unset no_proxy NO_PROXY
+
 if [ -n "${UBUNTU_VERSION}" ];then
     apt update
     apt-get install -y gpg-agent

@@ -29,6 +29,11 @@ def parse_args() -> Any:
 
     parser = ArgumentParser(description="Incremental build PyTorch with debinfo")
     parser.add_argument("--verbose", action="store_true")
+    parser.add_argument(
+        "--target",
+        default="torch_python",
+        help="Ninja target to build (e.g., torch_python, c10_xpu, torch_cpu)",
+    )
     parser.add_argument("files", nargs="*")
     return parser.parse_args()
 
@@ -66,9 +71,74 @@ def is_devel_setup() -> bool:
     return output.strip() == str(TORCH_DIR / "__init__.py")
 
 
-def create_build_plan() -> list[tuple[str, str]]:
+def create_build_plan_from_compdb(
+    files: list[str], target: str = "torch_python"
+) -> list[tuple[str, str]]:
+    """Get build commands directly from compdb for specified files."""
+    import json
+    import re
+
+    compdb_output = check_output(["ninja", "-t", "compdb"], cwd=str(BUILD_DIR))
+    compdb = json.loads(compdb_output)
+
+    rc = []
+    files_found = set()
+
+    # First, find compile commands for the specified files
+    for entry in compdb:
+        source_file = entry.get("file", "")
+        for file in files:
+            if file in source_file:
+                cmd = entry.get("command", "")
+                output = entry.get("output", "")
+                if cmd and output:
+                    # Remove sccache to avoid cached results
+                    cmd = re.sub(r"\S*sccache\s+", "", cmd)
+                    # Replace -O2/-O3 with -g -O0 for proper debugging
+                    cmd = cmd.replace("-O2", "-g -O0").replace("-O3", "-g -O0")
+                    # Remove -DNDEBUG to enable assertions
+                    cmd = cmd.replace("-DNDEBUG", "")
+                    rc.append((output, cmd))
+                    files_found.add(file)
+                break
+
+    if not files_found:
+        print(f"Warning: No compile commands found for: {files}")
+        return []
+
+    # Now find the link command for the target library
+    # Get the link command from ninja -n after we've deleted .o files
+    try:
+        ninja_output = check_output(
+            ["ninja", "-j1", "-v", "-n", target], cwd=str(BUILD_DIR)
+        )
+        for line in ninja_output.split("\n"):
+            if not line.startswith("["):
+                continue
+            line = line.split("]", 1)[1].strip()
+            if line.startswith(": &&") and line.endswith("&& :"):
+                line = line[4:-4]
+            # Check if this is a link command (contains -shared or has .so output)
+            if "-shared" in line or ".so" in line:
+                # Remove sccache
+                line = re.sub(r"\S*sccache\s+", "", line)
+                # Replace optimization flags
+                line = line.replace("-O2", "-g -O0").replace("-O3", "-g -O0")
+                line = line.replace("-DNDEBUG", "")
+                try:
+                    name = line.split("-o ", 1)[1].split(" ")[0]
+                    rc.append((name, line))
+                except IndexError:
+                    pass
+    except Exception as e:
+        print(f"Warning: Could not get link command: {e}")
+
+    return rc
+
+
+def create_build_plan(target: str = "torch_python") -> list[tuple[str, str]]:
     output = check_output(
-        ["ninja", "-j1", "-v", "-n", "torch_python"], cwd=str(BUILD_DIR)
+        ["ninja", "-j1", "-v", "-n", target], cwd=str(BUILD_DIR)
     )
     rc = []
     for line in output.split("\n"):
@@ -77,7 +147,16 @@ def create_build_plan() -> list[tuple[str, str]]:
         line = line.split("]", 1)[1].strip()
         if line.startswith(": &&") and line.endswith("&& :"):
             line = line[4:-4]
-        line = line.replace("-O2", "-g").replace("-O3", "-g")
+        # Remove sccache to avoid cached results
+        if "sccache" in line:
+            # Remove sccache wrapper (e.g., /opt/cache/bin/sccache)
+            import re
+
+            line = re.sub(r"\S*sccache\s+", "", line)
+        # Replace -O2/-O3 with -g -O0 for proper debugging
+        line = line.replace("-O2", "-g -O0").replace("-O3", "-g -O0")
+        # Remove -DNDEBUG to enable assertions
+        line = line.replace("-DNDEBUG", "")
         # Build Metal shaders with debug information
         if "xcrun metal " in line and "-frecord-sources" not in line:
             line += " -frecord-sources -gline-tables-only"
@@ -103,11 +182,36 @@ def main() -> None:
         print("Only ninja build system is supported at the moment")
         sys.exit(-1)
     args = parse_args()
+
+    # Delete corresponding .o files to force recompilation
     for file in args.files:
         if file is None:
             continue
+        # Find and delete the .o file using ninja's compdb
+        try:
+            compdb_output = check_output(
+                ["ninja", "-t", "compdb"], cwd=str(BUILD_DIR)
+            )
+            import json
+
+            compdb = json.loads(compdb_output)
+            for entry in compdb:
+                if file in entry.get("file", ""):
+                    obj_file = BUILD_DIR / entry.get("output", "")
+                    if obj_file.exists():
+                        print(f"Removing {obj_file} to force recompilation")
+                        obj_file.unlink()
+                    break
+        except Exception as e:
+            print(f"Warning: Could not find/delete .o file for {file}: {e}")
+
         Path(file).touch()
-    build_plan = create_build_plan()
+
+    # Use compdb-based build plan if specific files were provided
+    if args.files:
+        build_plan = create_build_plan_from_compdb(args.files, args.target)
+    else:
+        build_plan = create_build_plan(args.target)
     if len(build_plan) == 0:
         return print("Nothing to do")
     if len(build_plan) > 100:

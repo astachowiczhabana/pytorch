@@ -6,7 +6,6 @@ from copyreg import dispatch_table
 from typing import Any
 
 import torch
-import torch.cuda._pin_memory_utils as pin_memory_utils
 from torch.storage import UntypedStorage
 from torch.utils.weak import WeakIdKeyDictionary
 
@@ -33,10 +32,10 @@ class StateDictStager:
         share_memory: bool = False,
         pin_memory_min_bytes: int = 5,
     ):
-        if pin_memory and not torch.cuda.is_available():
+        if pin_memory and not torch.accelerator.is_available():
             warnings.warn(
-                "Ignoring pin_memory flag for checkpoint staging as pinning memory"
-                "requires CUDA, but CUDA is not available. ",
+                "Ignoring pin_memory flag for checkpoint staging as pinning memory "
+                "requires an accelerator, but no accelerator is available. ",
                 stacklevel=2,
             )
             self.pin_memory = False
@@ -157,24 +156,23 @@ class StateDictStager:
             cached_storage.copy_(storage, non_blocking=non_blocking)
             return cached_storage
 
-        # Create new CPU storage
-        if self.share_memory:
-            new_storage = type(storage)._new_shared(storage.size(), device="cpu")
-        else:
-            new_storage = type(storage)(storage.size(), device="cpu")
-
+        # Create new CPU storage with optional pinning and sharing
         # Skip pinning for tensors below the minimum size threshold
         # Small tensors (e.g., optimizer step counters, scalars) have negligible
         # transfer time improvement from pinning, but pinning overhead is significant
-        if self.pin_memory and new_storage.nbytes() >= self.pin_memory_min_bytes:
-            pin_memory_utils.pin_memory(new_storage.data_ptr(), new_storage.nbytes())
-            # Set up a weak reference to unpin when cpu storage is garbage collected
-            f = weakref.finalize(
-                new_storage, pin_memory_utils.unpin_memory, new_storage.data_ptr()
+        should_pin = self.pin_memory and storage.nbytes() >= self.pin_memory_min_bytes
+
+        if should_pin:
+            # Create pinned storage by allocating a pinned tensor and extracting its storage
+            # This works with any accelerator (CUDA, XPU, etc.)
+            pinned_tensor = torch.empty(
+                storage.nbytes(), dtype=torch.uint8, pin_memory=True
             )
-            # This makes sure that the finalizer is not called after
-            # cuda context is destroyed.
-            f.atexit = False
+            new_storage = pinned_tensor.untyped_storage()
+        elif self.share_memory:
+            new_storage = type(storage)._new_shared(storage.size(), device="cpu")
+        else:
+            new_storage = type(storage)(storage.size(), device="cpu")
 
         new_storage.copy_(storage, non_blocking=non_blocking)
 

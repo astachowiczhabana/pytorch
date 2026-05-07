@@ -765,6 +765,18 @@ class TestStateDictStager(TestCase):
 
         for pin_memory, share_memory in test_configs:
             with self.subTest(pin_memory=pin_memory, share_memory=share_memory):
+                # Skip pin+share combination on non-CUDA accelerators
+                # (in-place pinning of shared memory requires CUDA-specific APIs)
+                if (
+                    pin_memory
+                    and share_memory
+                    and not torch.cuda.is_available()
+                    and HAS_ACCELERATOR
+                ):
+                    self.skipTest(
+                        "Pinning shared memory requires CUDA-specific APIs and is not supported on other accelerators"
+                    )
+
                 # Create stager with specific configuration
                 stager = StateDictStager(
                     pin_memory=pin_memory, share_memory=share_memory

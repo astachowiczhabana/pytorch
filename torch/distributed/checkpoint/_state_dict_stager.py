@@ -6,7 +6,6 @@ from copyreg import dispatch_table
 from typing import Any
 
 import torch
-import torch.cuda._pin_memory_utils as pin_memory_utils
 from torch.storage import UntypedStorage
 from torch.utils.weak import WeakIdKeyDictionary
 
@@ -33,15 +32,50 @@ class StateDictStager:
         share_memory: bool = False,
         pin_memory_min_bytes: int = 5,
     ):
-        if pin_memory and not torch.cuda.is_available():
+        # Check if any accelerator is available for pinning memory
+        has_cuda = torch.cuda.is_available()
+        accelerator = (
+            torch.accelerator.current_accelerator()
+            if hasattr(torch, "accelerator")
+            else None
+        )
+        has_accelerator = accelerator is not None or has_cuda
+
+        if pin_memory and not has_accelerator:
             warnings.warn(
-                "Ignoring pin_memory flag for checkpoint staging as pinning memory"
-                "requires CUDA, but CUDA is not available. ",
+                "Ignoring pin_memory flag for checkpoint staging as pinning memory "
+                "requires an accelerator (CUDA, XPU, etc.), but none is available.",
                 stacklevel=2,
             )
             self.pin_memory = False
+            self._pin_device = None
+            self._use_cuda_pin_utils = False
         else:
             self.pin_memory = pin_memory
+            # Determine pinning strategy based on available backend
+            if pin_memory:
+                if has_cuda:
+                    # Use CUDA's in-place pinning utilities (supports shared memory)
+                    self._pin_device = "cuda"
+                    self._use_cuda_pin_utils = True
+                elif accelerator:
+                    # Non-CUDA accelerators: use generic API (doesn't support shared memory)
+                    self._pin_device = accelerator.type
+                    self._use_cuda_pin_utils = False
+                    if share_memory:
+                        warnings.warn(
+                            f"Pinning shared memory is not supported on {accelerator.type}. "
+                            "Shared memory will be used without pinning.",
+                            stacklevel=2,
+                        )
+                        self.pin_memory = False
+                else:
+                    self._pin_device = None
+                    self._use_cuda_pin_utils = False
+            else:
+                self._pin_device = None
+                self._use_cuda_pin_utils = False
+
         self.share_memory = share_memory
         # Mapping from original storage objects to CPU storages using weak references
         self._cached_storage_mapping = WeakIdKeyDictionary()
@@ -167,14 +201,23 @@ class StateDictStager:
         # Small tensors (e.g., optimizer step counters, scalars) have negligible
         # transfer time improvement from pinning, but pinning overhead is significant
         if self.pin_memory and new_storage.nbytes() >= self.pin_memory_min_bytes:
-            pin_memory_utils.pin_memory(new_storage.data_ptr(), new_storage.nbytes())
-            # Set up a weak reference to unpin when cpu storage is garbage collected
-            f = weakref.finalize(
-                new_storage, pin_memory_utils.unpin_memory, new_storage.data_ptr()
-            )
-            # This makes sure that the finalizer is not called after
-            # cuda context is destroyed.
-            f.atexit = False
+            if self._use_cuda_pin_utils:
+                # CUDA: use in-place pinning (works with shared memory)
+                import torch.cuda._pin_memory_utils as pin_memory_utils
+
+                pin_memory_utils.pin_memory(
+                    new_storage.data_ptr(), new_storage.nbytes()
+                )
+                # Set up a weak reference to unpin when cpu storage is garbage collected
+                f = weakref.finalize(
+                    new_storage, pin_memory_utils.unpin_memory, new_storage.data_ptr()
+                )
+                # This makes sure that the finalizer is not called after
+                # cuda context is destroyed.
+                f.atexit = False
+            else:
+                # Non-CUDA accelerators: use generic API (creates a copy, doesn't work with shared)
+                new_storage = new_storage.pin_memory(device=self._pin_device)
 
         new_storage.copy_(storage, non_blocking=non_blocking)
 

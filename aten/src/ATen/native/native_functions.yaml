@@ -9258,6 +9258,7 @@
     MPS: triangular_solve_mps_out
     SparseCsrCPU: triangular_solve_out_sparse_csr_cpu
     SparseCsrCUDA: triangular_solve_out_sparse_csr_cuda
+    SparseCsrXPU: triangular_solve_out_sparse_csr_xpu
 
 - func: triangular_solve(Tensor self, Tensor A, bool upper=True, bool transpose=False, bool unitriangular=False) -> (Tensor solution, Tensor cloned_coefficient)
   structured_delegate: triangular_solve.X

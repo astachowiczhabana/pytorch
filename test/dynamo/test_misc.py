@@ -104,6 +104,7 @@ from torch.testing._internal.common_utils import (
     skipIfHpu,
     skipIfNNModuleInlined,
     skipIfWindows,
+    skipIfXpu,
     subtest,
     TEST_HPU,
     TEST_XPU,
@@ -6570,6 +6571,7 @@ not ___dict_contains('cccccccc', G['sys'].modules)""",
         self.assertEqual(opt_fn(x, 1), 9)
         self.assertEqual(opt_fn(x, -2), 9)
 
+    @skipIfXpu(msg="https://github.com/intel/torch-xpu-ops/issues/4903")
     def test_torch_size_tensor_index_scalar_constant(self):
         def fn(x):
             idx = torch.tensor(1)

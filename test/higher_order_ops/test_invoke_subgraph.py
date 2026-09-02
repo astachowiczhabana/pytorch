@@ -3482,7 +3482,6 @@ _reuse_test_global = None
 class TestInvokeSubgraphCompileDevice(TestCase):
     hw_classification = HardwareClassification.ACCELERATOR
 
-    @skipXPUIf(True, "https://github.com/intel/torch-xpu-ops/issues/4819")
     @torch._dynamo.config.patch(canonicalize_output_graph_node_order=True)
     def test_return_none(self, device):
         from torch.nn import functional as F

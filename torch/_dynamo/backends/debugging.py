@@ -31,7 +31,7 @@ from importlib import import_module
 from typing import Any, TYPE_CHECKING
 
 import torch
-from functorch.compile import min_cut_rematerialization_partition
+from torch._functorch.partitioners import min_cut_rematerialization_partition
 from torch import _guards
 from torch._dynamo.output_graph import GraphCompileReason
 from torch._functorch import config as functorch_config

@@ -246,6 +246,12 @@ class CudaReproTests(TestCase):
         self.assertEqual(compiled_out["ten0"], eager_out["ten0"])
         self.assertEqual(compiled_out["ten1"], eager_out["ten1"])
 
+    @skipIfXpu(
+        msg="select_sdp_backend_xpu never selects efficient_attention (falls back "
+        "to math), so SDPBackend.EFFICIENT_ATTENTION never traces an "
+        "_scaled_dot_product_efficient_attention node for this test to capture; "
+        "torch-xpu-ops: 5329"
+    )
     @unittest.skipIf(
         not PLATFORM_SUPPORTS_MEM_EFF_ATTENTION,
         "Does not support mem_eff_attention",

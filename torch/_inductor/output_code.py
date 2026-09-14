@@ -600,7 +600,16 @@ class CompiledFxGraph(OutputCode):
             else None
         )
         self.cache_key = graph.cache_key
-        if graph.cache_path:
+        # Use the wrapper source graph.py already has in memory rather than
+        # re-reading graph.cache_path off disk: that path is content-addressed
+        # and shared across processes (PyCodeCache.write() skips the write and
+        # reuses it when the hash matches), so a concurrent
+        # PyCodeCache.cache_clear(purge=True) in another process/worker can
+        # remove it between the write and this read, raising FileNotFoundError
+        # (see https://github.com/intel/torch-xpu-ops/issues/5121).
+        if graph.cache_source_code:
+            self.source_code = graph.cache_source_code
+        elif graph.cache_path:
             with open(graph.cache_path) as f:
                 self.source_code = f.read()
         self.runnable_graph_str = runnable_graph_str

@@ -581,6 +581,11 @@ class GraphLowering(torch.fx.Interpreter):
         mark_nodes_dislike_padding(gm.graph, self.user_visible_output_strides)
         self.cache_key: str = ""  # This is the cache key for the compiled artifact
         self.cache_path: str = ""  # This is the path in the filesystem where the compiled artifact is stored
+        # The wrapper source, kept in memory so CompiledFxGraph doesn't have to
+        # re-read cache_path off disk (see _compile_to_module_lines): that file is
+        # content-addressed and shared across processes, so a concurrent
+        # PyCodeCache.cache_clear() elsewhere can remove it out from under a re-read.
+        self.cache_source_code: str = ""
         self.cache_linemap: list[
             tuple[int, str]
         ] = []  # This is the linemap used by the profiler to mark custom compiled kernels getting run
@@ -3174,6 +3179,7 @@ class GraphLowering(torch.fx.Interpreter):
             )
         self.cache_key = key
         self.cache_path = path
+        self.cache_source_code = wrapper_code.value
         self.cache_linemap = linemap  # type: ignore[assignment]
 
         if config.benchmark_harness and config.profile_bandwidth_output:

@@ -223,6 +223,26 @@ _device_mapping: dict[str, DeviceInfo] = {
         dram_gb=12.0,
     ),
     # Source:
+    # @lint-ignore https://www.intel.com/content/www/us/en/products/sku/243916/
+    # intel-arc-pro-b60-graphics/specifications.html
+    "INTEL B60": DeviceInfo(
+        tops={
+            torch.float64: 1.54,
+            torch.float32: 12.8,
+            "torch.tf32": 197.0,
+            torch.bfloat16: 197.0,
+            torch.float16: 197.0,
+            # not specified, fall back to fp16 matrix throughput
+            torch.float8_e8m0fnu: 197.0,
+            torch.float8_e4m3fnuz: 197.0,
+            torch.float8_e5m2: 197.0,
+            torch.float8_e5m2fnuz: 197.0,
+            torch.int8: 394,
+        },
+        dram_bw_gbs=456.0,
+        dram_gb=24.0,
+    ),
+    # Source:
     # @lint-ignore https://www.intel.com/content/www/us/en/products/sku/245797/
     # intel-arc-pro-b70-graphics/specifications.html
     "INTEL B70": DeviceInfo(
@@ -272,6 +292,7 @@ _device_mapping["AMD INSTINCT MI350X"] = _device_mapping["AMD MI350X"]
 _device_mapping["AMD INSTINCT MI300X"] = _device_mapping["AMD MI300X"]
 _device_mapping["AMD INSTINCT MI210X"] = _device_mapping["AMD MI210X"]
 _device_mapping["Intel(R) Arc(TM) B580 Graphics"] = _device_mapping["INTEL B580"]
+_device_mapping["Intel(R) Arc(TM) Pro B60 Graphics"] = _device_mapping["INTEL B60"]
 _device_mapping["Intel(R) Arc(TM) Pro B70 Graphics"] = _device_mapping["INTEL B70"]
 
 # Enforce the upper-case-key invariant so entries cannot silently miss

@@ -329,6 +329,9 @@ static void registerXpuDeviceProperties(PyObject* module) {
       ._(platform_name)                                          \
       ._(vendor)                                                 \
       ._(device_id)                                              \
+      ._(pci_domain_id)                                          \
+      ._(pci_bus_id)                                             \
+      ._(pci_device_id)                                          \
       ._(driver_version)                                         \
       ._(version)                                                \
       ._(max_compute_units)                                      \
@@ -365,7 +368,10 @@ static void registerXpuDeviceProperties(PyObject* module) {
             stream << "_XpuDeviceProperties(name='" << prop.name
                    << "', platform_name='" << prop.platform_name << "', type='"
                    << get_device_type(prop) << "', device_id=0x" << std::hex
-                   << std::uppercase << prop.device_id << std::dec << ", uuid="
+                   << std::uppercase << prop.device_id << std::dec
+                   << ", pci_domain_id=" << prop.pci_domain_id
+                   << ", pci_bus_id=" << prop.pci_bus_id
+                   << ", pci_device_id=" << prop.pci_device_id << ", uuid="
                    << uuid_to_string(
                           reinterpret_cast<const char*>(prop.uuid.data()))
                    << ", driver_version='" << prop.driver_version

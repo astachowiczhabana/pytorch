@@ -9,6 +9,7 @@ from contextlib import nullcontext
 import torch
 from torch.testing._internal.common_device_type import instantiate_device_type_tests
 from torch.testing._internal.common_utils import (
+    IS_LINUX,
     NoTest,
     run_tests,
     TEST_ACCELERATOR,
@@ -41,6 +42,31 @@ class TestAccelerator(TestCase):
             ValueError, "doesn't match the current accelerator"
         ):
             torch.accelerator.set_device_index("cpu")
+
+    @unittest.skipIf(TEST_MPS, "MPS has no PCI bus / NUMA concept")
+    @unittest.skipIf(not IS_LINUX, "NUMA binding is only supported on Linux")
+    def test_device_properties_pci_attributes(self):
+        # torch/numa/binding.py's _get_numa_node_index_for_device_index reads
+        # pci_domain_id/pci_bus_id/pci_device_id off get_device_properties()
+        # to locate the device's NUMA node via sysfs. That is an implicit
+        # backend contract (see #185266's PR description), so verify it here
+        # on real hardware for every backend torchrun --numa-binding can run
+        # against, rather than only through torch/test_numa_binding.py's
+        # MagicMock, which would pass even if no backend implemented it.
+        device_module = torch.get_device_module(self.device_type)
+        props = device_module.get_device_properties(0)
+        for attr in ("pci_domain_id", "pci_bus_id", "pci_device_id"):
+            self.assertTrue(
+                hasattr(props, attr),
+                f"{self.device_type} device properties missing {attr}, "
+                "required by torch/numa/binding.py",
+            )
+            self.assertIsInstance(getattr(props, attr), int)
+
+        from torch.numa.binding import _get_numa_node_index_for_device_index
+
+        numa_node_index = _get_numa_node_index_for_device_index(device_index=0)
+        self.assertGreaterEqual(numa_node_index, 0)
 
     @unittest.skipIf(not TEST_MULTIACCELERATOR, "only one accelerator detected")
     def test_generic_multi_device_behavior(self):

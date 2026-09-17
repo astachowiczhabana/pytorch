@@ -2,6 +2,7 @@
 #include <c10/util/Exception.h>
 #include <c10/xpu/XPUFunctions.h>
 
+#include <cstdio>
 #include <vector>
 
 namespace c10::xpu {
@@ -192,6 +193,24 @@ void initDeviceProperties(DeviceProp* device_prop, DeviceIndex device) {
   AT_FORALL_XPU_EXP_CL_ASPECT(ASSIGN_EXP_CL_ASPECT);
 
   AT_FORALL_XPU_EXP_DEVICE_PROPERTIES(ASSIGN_EXP_DEVICE_PROP);
+
+  // pci_address is a single string (e.g. "0000:4d:00.0"); split it into the
+  // domain/bus/device ints that torch/numa/binding.py expects, mirroring the
+  // three separate fields CUDA exposes.
+  if (!device_prop->pci_address.empty()) {
+    unsigned domain = 0, bus = 0, dev = 0, func = 0;
+    if (std::sscanf(
+            device_prop->pci_address.c_str(),
+            "%x:%x:%x.%x",
+            &domain,
+            &bus,
+            &dev,
+            &func) == 4) {
+      device_prop->pci_domain_id = domain;
+      device_prop->pci_bus_id = bus;
+      device_prop->pci_device_id = dev;
+    }
+  }
 
 #if SYCL_COMPILER_VERSION >= 20260100
   // TODO: Remove once driver supports querying Xe topology properties.

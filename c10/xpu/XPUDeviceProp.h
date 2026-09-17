@@ -162,6 +162,10 @@ namespace c10::xpu {
   /* the maximum bus width between device and memory in bits. */              \
   _(memory_bus_width, memory_bus_width, 0)                                    \
                                                                               \
+  /* the PCI address of the device, e.g. "0000:4d:00.0". Empty if the         \
+   * driver doesn't expose it. */                                             \
+  _(pci_address, pci_address, std::string())                                  \
+                                                                              \
   AT_FORALL_XPU_EXT_DEVICE_PROPERTIES_XE(_)
 
 #define AT_FORALL_XPU_DEVICE_ASPECT(_)                  \
@@ -214,27 +218,34 @@ namespace c10::xpu {
   _DEFINE_SYCL_PROP(                     \
       sycl::ext::oneapi::experimental::info::device, property, property)
 
-struct C10_XPU_API DeviceProp{
-    AT_FORALL_XPU_DEVICE_PROPERTIES(DEFINE_DEVICE_PROP)
+struct C10_XPU_API DeviceProp {
+  AT_FORALL_XPU_DEVICE_PROPERTIES(DEFINE_DEVICE_PROP)
 
-    // the platform name.
-    DEFINE_PLATFORM_PROP(name, platform_name)
+  // the platform name.
+  DEFINE_PLATFORM_PROP(name, platform_name)
 
-    // ext properties.
-    AT_FORALL_XPU_EXT_DEVICE_PROPERTIES(DEFINE_EXT_DEVICE_PROP)
+  // ext properties.
+  AT_FORALL_XPU_EXT_DEVICE_PROPERTIES(DEFINE_EXT_DEVICE_PROP)
 
-    // device aspects.
-    DEFINE_DEVICE_ASPECT(is_integrated_gpu)
+  // PCI domain, bus, and device (slot) number, parsed from pci_address.
+  // Mirrors cudaDeviceProp's pciDomainID/pciBusID/pciDeviceID so
+  // torch/numa/binding.py can locate the device's NUMA node via sysfs.
+  // Zero when pci_address is empty.
+  uint32_t pci_domain_id = 0;
+  uint32_t pci_bus_id = 0;
+  uint32_t pci_device_id = 0;
 
-    // device has aspects.
-    AT_FORALL_XPU_DEVICE_ASPECT(DEFINE_DEVICE_HAS_ASPECT)
+  // device aspects.
+  DEFINE_DEVICE_ASPECT(is_integrated_gpu)
 
-    // experimental device aspects.
-    AT_FORALL_XPU_EXP_CL_ASPECT(DEFINE_DEVICE_HAS_ASPECT)
+  // device has aspects.
+  AT_FORALL_XPU_DEVICE_ASPECT(DEFINE_DEVICE_HAS_ASPECT)
 
-    // experimental device properties.
-    AT_FORALL_XPU_EXP_DEVICE_PROPERTIES(DEFINE_EXP_DEVICE_PROP)
+  // experimental device aspects.
+  AT_FORALL_XPU_EXP_CL_ASPECT(DEFINE_DEVICE_HAS_ASPECT)
 
+  // experimental device properties.
+  AT_FORALL_XPU_EXP_DEVICE_PROPERTIES(DEFINE_EXP_DEVICE_PROP)
 };
 
 #undef _DEFINE_SYCL_PROP

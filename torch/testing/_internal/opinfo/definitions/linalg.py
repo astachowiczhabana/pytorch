@@ -38,6 +38,7 @@ from torch.testing._internal.common_utils import (
     IS_ARM64,
     IS_LINUX,
     IS_WINDOWS,
+    LazyVal,
     make_fullrank_matrices_with_distinct_singular_values,
     skipIfNoNvmath,
     skipIfSlowGradcheckEnv,
@@ -46,6 +47,7 @@ from torch.testing._internal.common_utils import (
     TEST_WITH_TORCHINDUCTOR,
     TEST_XPU,
 )
+from torch.testing._internal.common_xpu import get_xpu_codename, XPUCodename
 from torch.testing._internal.opinfo.core import (
     clone_sample,
     DecorateInfo,
@@ -59,6 +61,14 @@ from torch.testing._internal.opinfo.core import (
     SampleInput,
 )
 from torch.testing._internal.opinfo.refs import PythonRefInfo, ReductionPythonRefInfo
+
+
+# The `linalg.tensorinv` xfail below (torch-xpu-ops#4313) is a oneMKL LU-based
+# inverse (getrf/getrs) accuracy defect reported specifically on PVC (Xe/Xe-HPC).
+# Guard with is_available() first: get_xpu_codename() calls
+# torch.xpu.get_device_capability(), which is unsafe to call when there is no
+# XPU device at all.
+IS_XPU_PVC = LazyVal(lambda: TEST_XPU and get_xpu_codename() == XPUCodename.PVC)
 
 
 def sample_kwargs_vector_norm(t, **kwargs):
@@ -2557,13 +2567,17 @@ op_db: list[OpInfo] = [
                 device_type="mps",
                 dtypes=(torch.complex64,),
             ),
-            # torch-xpu-ops/issues/4313
+            # torch-xpu-ops/issues/4313: oneMKL LU-based inverse accuracy
+            # defect, confirmed present only on PVC. On Xe2+ (e.g. Battlemage)
+            # the same sample inputs match NumPy to ~1e-16, so scope the
+            # expected failure to PVC rather than all XPU hardware.
             DecorateInfo(
                 unittest.expectedFailure,
                 "TestCommon",
                 "test_numpy_ref",
                 device_type="xpu",
                 dtypes=(torch.float64,),
+                active_if=IS_XPU_PVC,
             ),
             # The test is flaky on AMX with Inductor
             DecorateInfo(

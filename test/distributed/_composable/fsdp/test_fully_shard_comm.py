@@ -71,8 +71,6 @@ from torch.testing._internal.common_utils import (
     skip_but_pass_in_sandcastle_if,
     skipIfTorchInductor,
     TEST_WITH_ROCM,
-    TEST_XPU,
-    xfailIf,
 )
 from torch.testing._internal.distributed._tensor.common_dtensor import (
     FeedForward,
@@ -440,7 +438,6 @@ class TestFullyShardCommunication(FSDPTest):
         )
 
     @skip_if_lt_x_gpu(2)
-    @xfailIf(TEST_XPU)  # https://github.com/intel/torch-xpu-ops/issues/1571
     def test_set_reduce_scatter_divide_factor(self):
         self.run_subtests(
             {

@@ -3,6 +3,8 @@
 #include <c10/xpu/XPUMacros.h>
 #include <sycl/sycl.hpp>
 
+#include <string>
+
 namespace c10::xpu {
 
 #define AT_FORALL_XPU_DEVICE_PROPERTIES(_)                                     \
@@ -162,6 +164,9 @@ namespace c10::xpu {
   /* the maximum bus width between device and memory in bits. */              \
   _(memory_bus_width, memory_bus_width, 0)                                    \
                                                                               \
+  /* the PCI address of the device, as "<domain>:<bus>:<device>.<fn>". */     \
+  _(pci_address, pci_address, std::string())                                  \
+                                                                              \
   AT_FORALL_XPU_EXT_DEVICE_PROPERTIES_XE(_)
 
 #define AT_FORALL_XPU_DEVICE_ASPECT(_)                  \
@@ -222,6 +227,14 @@ struct C10_XPU_API DeviceProp{
 
     // ext properties.
     AT_FORALL_XPU_EXT_DEVICE_PROPERTIES(DEFINE_EXT_DEVICE_PROP)
+
+    // the PCI domain/bus/device IDs, parsed from pci_address above. Mirrors
+    // cudaDeviceProp's pciDomainID/pciBusID/pciDeviceID so device-generic
+    // callers (e.g. torch/numa/binding.py) can read them the same way on
+    // every backend. -1 if pci_address couldn't be parsed.
+    int pci_domain_id = -1;
+    int pci_bus_id = -1;
+    int pci_device_id = -1;
 
     // device aspects.
     DEFINE_DEVICE_ASPECT(is_integrated_gpu)

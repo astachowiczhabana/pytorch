@@ -511,6 +511,9 @@ def get_device_properties(
     - ``architecture`` (int): device architecture identifier (experimental).
     - ``type`` (str): device type, e.g. 'cpu', 'gpu', accelerator', 'host', 'unknown'.
     - ``uuid`` (Any): device UUID (Universal Unique ID), 16 bytes.
+    - ``pci_domain_id`` (int): PCI domain ID of the device, or -1 if unavailable.
+    - ``pci_bus_id`` (int): PCI bus ID of the device, or -1 if unavailable.
+    - ``pci_device_id`` (int): PCI device (slot) ID of the device, or -1 if unavailable.
 
     Args:
         device (torch.device or int or str): device for which to return the

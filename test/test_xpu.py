@@ -185,6 +185,14 @@ class TestXpu(TestCase):
             device_properties.is_integrated_gpu,
             device_capability["is_integrated_gpu"],
         )
+        # torch/numa/binding.py's device-generic contract (see #185266)
+        # requires every accelerator backend's device properties to expose
+        # these three ints, formatted the same way CUDA's cudaDeviceProp does.
+        for pci_attr in ("pci_domain_id", "pci_bus_id", "pci_device_id"):
+            self.assertIsInstance(getattr(device_properties, pci_attr), int)
+            self.assertEqual(
+                getattr(device_properties, pci_attr), device_capability[pci_attr]
+            )
 
     def test_get_device_capability(self):
         device_capability = torch.xpu.get_device_capability()

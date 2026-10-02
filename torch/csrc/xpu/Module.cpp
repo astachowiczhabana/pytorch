@@ -375,6 +375,9 @@ static void registerXpuDeviceProperties(PyObject* module) {
       ._(version)                                                \
       ._(max_compute_units)                                      \
       ._(gpu_eu_count)                                           \
+      ._(pci_domain_id)                                          \
+      ._(pci_bus_id)                                             \
+      ._(pci_device_id)                                          \
       ._(max_work_group_size)                                    \
       ._(max_num_sub_groups)                                     \
       ._(memory_clock_rate)                                      \

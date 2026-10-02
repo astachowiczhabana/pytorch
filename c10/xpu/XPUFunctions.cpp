@@ -2,6 +2,7 @@
 #include <c10/util/Exception.h>
 #include <c10/xpu/XPUFunctions.h>
 
+#include <cstdio>
 #include <vector>
 
 namespace c10::xpu {
@@ -184,6 +185,24 @@ void initDeviceProperties(DeviceProp* device_prop, DeviceIndex device) {
       raw_device.get_info<device::platform>().get_info<platform::name>();
 
   AT_FORALL_XPU_EXT_DEVICE_PROPERTIES(ASSIGN_EXT_DEVICE_PROP);
+
+  // Parse "<domain>:<bus>:<device>.<function>" (e.g. "0000:4d:00.0") into the
+  // separate integer fields that device-generic callers like
+  // torch/numa/binding.py expect, matching cudaDeviceProp's
+  // pciDomainID/pciBusID/pciDeviceID. Leave the defaults (-1) if the driver
+  // doesn't expose ext_intel_pci_address or the format doesn't parse.
+  unsigned pci_domain = 0, pci_bus = 0, pci_device = 0, pci_function = 0;
+  if (sscanf(
+          device_prop->pci_address.c_str(),
+          "%x:%x:%x.%x",
+          &pci_domain,
+          &pci_bus,
+          &pci_device,
+          &pci_function) == 4) {
+    device_prop->pci_domain_id = static_cast<int>(pci_domain);
+    device_prop->pci_bus_id = static_cast<int>(pci_bus);
+    device_prop->pci_device_id = static_cast<int>(pci_device);
+  }
 
   ASSIGN_DEVICE_ASPECT(is_integrated_gpu)
 
